@@ -10,20 +10,31 @@ const createQuestionSetSchema = z.object({
 
 export async function POST(req) {
   try {
-    const body = await req.json();
-    
-    // Data validate karo
+    // 1. Sabse pehle RAW text padho (Yeh sabse important step hai)
+    const rawText = await req.text();
+    console.log("🔥 RAW REQUEST TEXT AAYA HAI:", rawText);
+
+    // 2. Usko JSON mein convert karo
+    let body;
+    try {
+      body = JSON.parse(rawText);
+      console.log("✅ PARSED BODY:", body);
+    } catch (parseError) {
+      return NextResponse.json({ message: 'Invalid JSON format' }, { status: 400 });
+    }
+
+    // 3. Ab Zod se validate karo
     const validatedData = createQuestionSetSchema.parse(body);
 
-    // Host ID find karo (Testing ke liye pehla user)
+    // 4. Host ID find karo
     const tempHost = await prisma.user.findFirst();
     const hostId = tempHost ? tempHost.id : "temp-host-id";
 
     if (!hostId) {
-      return NextResponse.json({ message: 'No user found to act as host. Please register first.' }, { status: 400 });
+      return NextResponse.json({ message: 'No user found to act as host.' }, { status: 400 });
     }
 
-    // Database mein save karo
+    // 5. Database mein save karo
     const newQuestionSet = await prisma.questionSet.create({
       data: {
         name: validatedData.name,
@@ -38,20 +49,15 @@ export async function POST(req) {
     );
 
   } catch (error) {
-    // 🔥 Bulletproof Error Handling
-    // Check karo ki error.errors ek array hai ya nahi
-    if (error && typeof error === 'object' && 'errors' in error && Array.isArray(error.errors)) {
+    console.error("❌ FINAL ERROR:", error);
+    
+    if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { message: error.errors[0]?.message || 'Invalid data provided' }, 
+        { message: error.errors[0]?.message || 'Invalid data' }, 
         { status: 400 }
       );
     }
 
-    // Agar ZodError nahi hai, toh normal error message dikhao
-    console.error('Error creating question set:', error);
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : 'Internal server error' }, 
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }

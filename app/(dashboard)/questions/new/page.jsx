@@ -15,22 +15,40 @@ export default function NewQuestionSetPage() {
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
-    if (!name.trim()) return;
+    const finalName = name.trim();
+    
+    if (!finalName) {
+      toast({ title: 'Name is required', variant: 'destructive' });
+      return;
+    }
+
     setSaving(true);
+    
+    // 🔥 YEH PAYLOAD BANAO
+    const payload = {
+      name: finalName,
+      description: description.trim(),
+      questions: [],
+    };
+
+    // 🔥 FRONTEND CHECK: Browser ke Console (F12) mein yeh dekhna
+    console.log("🚀 FRONTEND SENDING PAYLOAD:", payload);
+
     try {
-      await questionApi.create({ name: name.trim(), description, questions: [] });
+      await questionApi.create(payload);
       toast({ title: 'Question set created' });
       router.push('/questions');
     } catch (err) {
+      console.error("❌ BACKEND ERROR RESPONSE:", err.response?.data);
       toast({
         title: 'Failed to save',
         description: err?.response?.data?.message || 'Please try again.',
         variant: 'destructive',
       });
+    } finally {
       setSaving(false);
     }
   }
-
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
