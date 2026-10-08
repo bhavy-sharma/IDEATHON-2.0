@@ -3,14 +3,7 @@
 import * as React from 'react';
 
 const TOAST_LIMIT = 3;
-const TOAST_REMOVE_DELAY = 1000000;
-
-const actionTypes = {
-  ADD_TOAST: 'ADD_TOAST',
-  UPDATE_TOAST: 'UPDATE_TOAST',
-  DISMISS_TOAST: 'DISMISS_TOAST',
-  REMOVE_TOAST: 'REMOVE_TOAST',
-};
+const TOAST_REMOVE_DELAY = 5000;
 
 let count = 0;
 function genId() {
@@ -49,11 +42,9 @@ export const reducer = (state, action) => {
 
     case 'DISMISS_TOAST': {
       const { toastId } = action;
-      if (toastId) {
-        addToRemoveQueue(toastId);
-      } else {
-        state.toasts.forEach((toast) => addToRemoveQueue(toast.id));
-      }
+      if (toastId) addToRemoveQueue(toastId);
+      else state.toasts.forEach((toast) => addToRemoveQueue(toast.id));
+
       return {
         ...state,
         toasts: state.toasts.map((t) =>
