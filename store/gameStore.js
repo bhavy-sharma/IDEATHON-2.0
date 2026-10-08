@@ -1,111 +1,54 @@
 import { create } from 'zustand';
 
-const initialState = {
+export const useGameStore = create((set) => ({
   room: null,
   players: [],
-  status: 'LOBBY',
-
-  // Question
+  status: 'LOBBY', // LOBBY, ACTIVE, REVEAL, ENDED
   currentQuestion: null,
   questionIndex: 0,
   totalQuestions: 0,
   endTime: null,
-
-  // Answer state
   selectedOptionId: null,
   hasAnswered: false,
   correctOptionId: null,
-
-  // Leaderboard (solo mode)
   leaderboard: [],
-
-  // Teams
-  mode: 'SOLO', // 'SOLO' | 'TEAM'
-  teams: [], // [{ id, name, color, memberIds: [], score, rank }]
+  mode: 'SOLO', // SOLO or TEAM
+  teams: [],
   myTeamId: null,
+  teamLeaderboard: [],
 
-  // Team leaderboard
-  teamLeaderboard: [], // [{ teamId, teamName, color, score, rank }]
-};
-
-export const useGameStore = create((set, get) => ({
-  ...initialState,
-
-  setRoom: (room) =>
-    set({
-      room,
-      mode: room?.settings?.mode || 'SOLO',
-    }),
-
-  setPlayers: (players) => {
-    const mode = get().mode;
-    // In team mode, players have a teamId; group them
-    if (mode === 'TEAM') {
-      const byTeam = new Map();
-      players.forEach((p) => {
-        if (!p.teamId) return;
-        if (!byTeam.has(p.teamId)) byTeam.set(p.teamId, []);
-        byTeam.get(p.teamId).push(p);
-      });
-      set((state) => ({
-        players,
-        teams: state.teams.map((t) => ({
-          ...t,
-          memberIds: byTeam.get(t.id)?.map((p) => p.id) || [],
-        })),
-      }));
-    } else {
-      set({ players });
-    }
-  },
-
+  setRoom: (room) => set({ room }),
+  setPlayers: (players) => set({ players }),
   setStatus: (status) => set({ status }),
-
-  setQuestion: (question) =>
-    set({
-      currentQuestion: question,
-      selectedOptionId: null,
-      hasAnswered: false,
-      correctOptionId: null,
-    }),
-
-  setQuestionIndex: (questionIndex) => set({ questionIndex }),
-  setTotalQuestions: (totalQuestions) => set({ totalQuestions }),
+  setCurrentQuestion: (question) => set({ 
+    currentQuestion: question, 
+    hasAnswered: false, 
+    selectedOptionId: null 
+  }),
   setEndTime: (endTime) => set({ endTime }),
-
-  selectOption: (optionId) => {
-    if (get().hasAnswered) return;
-    set({ selectedOptionId: optionId });
-  },
-
-  markAnswered: () => set({ hasAnswered: true }),
-
-  revealAnswer: (correctOptionId, leaderboard) =>
-    set({ correctOptionId, leaderboard }),
-
-  updatePlayerReady: (playerId, isReady) =>
-    set((state) => ({
-      players: state.players.map((p) =>
-        p.id === playerId ? { ...p, isReady } : p
-      ),
-    })),
-
-  updateLeaderboard: (leaderboard) => set({ leaderboard }),
-
-  // ---------- Teams ----------
-
+  setCorrectOptionId: (id) => set({ correctOptionId: id }),
+  setLeaderboard: (leaderboard) => set({ leaderboard }),
   setTeams: (teams) => set({ teams }),
-
-  setMyTeamId: (myTeamId) => set({ myTeamId }),
-
-  setTeamLeaderboard: (teamLeaderboard) => set({ teamLeaderboard }),
-
-  updateTeamScore: (teamId, score) =>
-    set((state) => ({
-      teams: state.teams.map((t) =>
-        t.id === teamId ? { ...t, score } : t
-      ),
-    })),
-
-  reset: () => set(initialState),
+  setMyTeamId: (id) => set({ myTeamId: id }),
+  
+  selectOption: (optionId) => set({ selectedOptionId: optionId }),
+  markAnswered: () => set({ hasAnswered: true }),
+  
+  reset: () => set({
+    room: null,
+    players: [],
+    status: 'LOBBY',
+    currentQuestion: null,
+    questionIndex: 0,
+    totalQuestions: 0,
+    endTime: null,
+    selectedOptionId: null,
+    hasAnswered: false,
+    correctOptionId: null,
+    leaderboard: [],
+    mode: 'SOLO',
+    teams: [],
+    myTeamId: null,
+    teamLeaderboard: [],
+  }),
 }));

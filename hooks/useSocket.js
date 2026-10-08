@@ -1,281 +1,106 @@
-'use client';
-
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
-import { useUserStore } from '@/store/userStore';
 import { useGameStore } from '@/store/gameStore';
-import { toast } from '@/components/ui/use-toast';
-import { saveReconnectToken } from '@/hooks/useReconnect';
+import { useUserStore } from '@/store/userStore';
 
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
 
 export function useSocket() {
   const socketRef = useRef(null);
-  const [isConnected, setIsConnected] = useState(false);
-
-  const accessToken = useUserStore((s) => s.accessToken);
-
-  const {
-    // Core game
-    setRoom,
-    setPlayers,
-    setStatus,
-    setQuestion,
-    setQuestionIndex,
-    setTotalQuestions,
-    setEndTime,
-    revealAnswer,
-    updatePlayerReady,
-
-    // Teams
-    setTeams,
-    setMyTeamId,
-    setTeamLeaderboard,
-    updateTeamScore,
+  const user = useUserStore((s) => s.user);
+  
+  const { 
+    setStatus, setPlayers, setRoom, setCurrentQuestion, 
+    setEndTime, setCorrectOptionId, setLeaderboard, setTeams, setMyTeamId 
   } = useGameStore();
 
-  // ============================================
-  // Initialize socket connection
-  // ============================================
-
   useEffect(() => {
-    if (!accessToken) return;
-
-    const socket = io(SOCKET_URL, {
-      auth: { token: accessToken },
-      transports: ['websocket'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+    // Initialize socket
+    socketRef.current = io(SOCKET_URL, {
+      withCredentials: true,
+      autoConnect: true,
     });
 
-    socketRef.current = socket;
+    const socket = socketRef.current;
 
-    // ---------- Connection lifecycle ----------
-
-    socket.on('connect', () => {
-      console.log('[Socket] Connected:', socket.id);
-      setIsConnected(true);
-    });
-
-    socket.on('disconnect', (reason) => {
-      console.log('[Socket] Disconnected:', reason);
-      setIsConnected(false);
-    });
-
-    socket.on('connect_error', (err) => {
-      console.error('[Socket] Connection error:', err.message);
-      setIsConnected(false);
-    });
-
-    // ---------- Room ----------
-
-    socket.on('room_state', (data) => {
-      if (data.room) setRoom(data.room);
-      setPlayers(data.players || []);
-      setStatus(data.status);
-      setQuestionIndex(data.currentQuestionIndex ?? 0);
-      setTotalQuestions(data.totalQuestions ?? 0);
-
-      if (data.currentQuestion) {
-        setQuestion(data.currentQuestion);
+    // 🔥 YEH SABSE ZARURI HAI: Socket events ko Store se connect karo
+    socket.on('roomJoined', (data) => {
+      console.log("✅ Socket: Room Joined", data);
+      setRoom(data.room);
+      setPlayers(data.players);
+      setStatus(data.room.status);
+      if (data.room.mode === 'TEAM') {
+        setTeams(data.teams || []);
       }
-
-      // Hydrate teams if provided
-      if (data.teams) setTeams(data.teams);
-      if (data.myTeamId) setMyTeamId(data.myTeamId);
     });
 
-    socket.on('room_error', (data) => {
-      toast({
-        title: 'Room error',
-        description: data?.message || 'Something went wrong.',
-        variant: 'destructive',
-      });
+    socket.on('playerJoined', (data) => {
+      console.log("✅ Socket: Player Joined", data);
+      setPlayers(data.players);
     });
 
-    // ---------- Questions ----------
-
-    socket.on('question_start', (data) => {
-      // Toast on first question only
-      if (data.questionIndex === 0) {
-        toast({
-          title: '🚀 Game started!',
-          description: 'Good luck!',
-          duration: 2000,
-        });
-      }
-
-      setQuestion({
-        id: data.questionId,
-        text: data.text,
-        options: data.options,
-        imageUrl: data.imageUrl,
-        tableData: data.tableData,
-        timeLimit: data.timeLimit,
-        topic: data.topic || '',
-        difficulty: data.difficulty || 'MEDIUM',
-        createdAt: new Date().toISOString(),
-      });
-      setQuestionIndex(data.questionIndex ?? 0);
-      setTotalQuestions(data.totalQuestions ?? 0);
-      setEndTime(data.endTime);
+    socket.on('gameStarted', (data) => {
+      console.log("✅ Socket: Game Started", data);
       setStatus('ACTIVE');
+      setCurrentQuestion(data.question);
+      setEndTime(Date.now() + data.question.timeLimit * 1000);
     });
 
-    socket.on('question_reveal', (data) => {
-      revealAnswer(data.correctOptionId, data.leaderboard || []);
+    socket.on('questionUpdate', (data) => {
+      console.log("✅ Socket: Question Update", data);
+      setCurrentQuestion(data.question);
+      setEndTime(Date.now() + data.question.timeLimit * 1000);
+      setCorrectOptionId(null); // Reset correct option for new question
+    });
+
+    socket.on('answerReveal', (data) => {
+      console.log("✅ Socket: Answer Reveal", data);
       setStatus('REVEAL');
+      setCorrectOptionId(data.correctOptionId);
+      setLeaderboard(data.leaderboard);
+    });
 
-      // Show correct/wrong toast if the player had answered
-      const gameState = useGameStore.getState();
-      const wasCorrect = gameState.selectedOptionId === data.correctOptionId;
-
-      if (gameState.selectedOptionId) {
-        toast({
-          title: wasCorrect ? '✓ Correct!' : '✗ Wrong answer',
-          description: wasCorrect
-            ? 'Points added to your score'
-            : 'Better luck next question',
-          duration: 2500,
-          variant: wasCorrect ? 'default' : 'destructive',
-        });
+    socket.on('leaderboardUpdate', (data) => {
+      console.log("✅ Socket: Leaderboard Update", data);
+      setLeaderboard(data.leaderboard);
+      if (data.teamLeaderboard) {
+        // setTeamLeaderboard(data.teamLeaderboard); // Agar store mein hai toh
       }
     });
 
-    // ---------- Players ----------
-
-    socket.on('player_ready_updated', (data) => {
-      updatePlayerReady(data.playerId, data.isReady);
-    });
-
-    socket.on('player_joined', (data) => {
-      if (data?.name) {
-        toast({
-          title: '👋 Player joined',
-          description: data.name,
-          duration: 2000,
-        });
-      }
-    });
-
-    // ---------- Teams ----------
-
-    socket.on('teams_assigned', ({ teams, myTeamId }) => {
-      setTeams(teams || []);
-      if (myTeamId) setMyTeamId(myTeamId);
-
-      const myTeam = (teams || []).find((t) => t.id === myTeamId);
-      if (myTeam) {
-        toast({
-          title: 'Teams assigned!',
-          description: `You're on ${myTeam.name}.`,
-        });
-      }
-    });
-
-    socket.on('team_leaderboard_update', ({ teamLeaderboard }) => {
-      setTeamLeaderboard(teamLeaderboard || []);
-    });
-
-    socket.on('team_score_updated', ({ teamId, score }) => {
-      updateTeamScore(teamId, score);
-    });
-
-    // ---------- Game end ----------
-
-    socket.on('game_ended', (data) => {
+    socket.on('gameEnded', (data) => {
+      console.log("✅ Socket: Game Ended", data);
       setStatus('ENDED');
-      if (data?.teamLeaderboard) {
-        setTeamLeaderboard(data.teamLeaderboard);
-      }
-      toast({
-        title: '🏁 Game ended',
-        description: 'Check the final standings!',
-        duration: 3000,
-      });
+      setLeaderboard(data.leaderboard);
     });
-
-    // ---------- Reconnect token ----------
-
-    socket.on('reconnect_token', ({ roomCode, token }) => {
-      saveReconnectToken(roomCode, token);
-    });
-
-    // ---------- Cleanup ----------
 
     return () => {
       socket.disconnect();
-      socketRef.current = null;
-      setIsConnected(false);
     };
-  }, [
-    accessToken,
-    setRoom,
-    setPlayers,
-    setStatus,
-    setQuestion,
-    setQuestionIndex,
-    setTotalQuestions,
-    setEndTime,
-    revealAnswer,
-    updatePlayerReady,
-    setTeams,
-    setMyTeamId,
-    setTeamLeaderboard,
-    updateTeamScore,
-  ]);
+  }, [setRoom, setPlayers, setStatus, setCurrentQuestion, setEndTime, setCorrectOptionId, setLeaderboard, setTeams]);
 
-  // ============================================
-  // Emit helpers
-  // ============================================
+  // Actions to emit to server
+  const joinRoom = (code, name) => {
+    socketRef.current?.emit('joinRoom', { code, name, userId: user?.id });
+  };
 
-  const joinRoom = useCallback((code, name) => {
-    socketRef.current?.emit('join_room', { code, name });
-  }, []);
+  const startGame = () => {
+    socketRef.current?.emit('startGame');
+  };
 
-  const leaveRoom = useCallback(() => {
-    socketRef.current?.emit('leave_room');
-  }, []);
+  const submitAnswer = (data) => {
+    socketRef.current?.emit('submitAnswer', data);
+  };
 
-  const toggleReady = useCallback(() => {
-    socketRef.current?.emit('toggle_ready');
-  }, []);
-
-  const startGame = useCallback(() => {
-    socketRef.current?.emit('start_game');
-  }, []);
-
-  const submitAnswer = useCallback(({ questionId, optionId }) => {
-    socketRef.current?.emit('submit_answer', {
-      questionId,
-      optionId,
-      clientTimestamp: Date.now(),
-    });
-  }, []);
-
-  const syncState = useCallback((reconnectToken) => {
-    socketRef.current?.emit('sync_state', { token: reconnectToken });
-  }, []);
-
-  const assignTeams = useCallback((teams) => {
-    socketRef.current?.emit('assign_teams', { teams });
-  }, []);
-
-  // ============================================
-  // Return
-  // ============================================
+  const assignTeams = (teamsData) => {
+    socketRef.current?.emit('assignTeams', teamsData);
+  };
 
   return {
-    socket: socketRef.current,
-    isConnected,
+    isConnected: socketRef.current?.connected || false,
     joinRoom,
-    leaveRoom,
-    toggleReady,
     startGame,
     submitAnswer,
-    syncState,
     assignTeams,
   };
 }
