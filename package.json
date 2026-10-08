@@ -4,21 +4,27 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "server": "node server.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
-    "@prisma/client": "^7.10.0",
+    "@prisma/client": "5.22.0",
+    "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.52.0",
     "next": "16.4.0",
-    "prisma": "8.1.0-dev.7",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "redis": "^6.3.0",
@@ -35,8 +41,10 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.4",
     "babel-plugin-react-compiler": "1.0.0",
+    "concurrently": "^10.0.5",
     "eslint": "^9",
     "eslint-config-next": "16.4.0",
+    "prisma": "5.22.0",
     "tailwindcss": "^4"
   },
   "packageManager": "pnpm@11.10.0"
