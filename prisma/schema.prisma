@@ -37,18 +37,22 @@ model College {
 }
 
 model User {
-  id           String       @id @default(cuid())
-  name         String
-  email        String       @unique
-  passwordHash String
-  role         Role         @default(PLAYER)
-  collegeId    String
-  college      College      @relation(fields: [collegeId], references: [id])
-  roomsCreated Room[]       @relation("HostRooms")
-  roomPlayers  RoomPlayer[]
-  answers      Answer[]
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  id             String        @id @default(cuid())
+  name           String
+  email          String        @unique
+  passwordHash   String
+  role           Role          @default(PLAYER)
+  collegeId      String
+  college        College       @relation(fields: [collegeId], references: [id])
+  
+  // Relations
+  roomsCreated   Room[]        @relation("HostRooms")
+  questionSets   QuestionSet[] // 👈 Added: Host ke banaye hue question sets
+  roomPlayers    RoomPlayer[]
+  answers        Answer[]
+  
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 model QuestionSet {
@@ -56,9 +60,11 @@ model QuestionSet {
   name        String
   description String?
   hostId      String
+  host        User       @relation(fields: [hostId], references: [id]) // 👈 Added proper relation
   questions   Question[]
+  rooms       Room[]     // 👈 Fixed: Capital 'R' se lowercase 'r' (Best Practice)
   createdAt   DateTime   @default(now())
-  Room        Room[]
+  updatedAt   DateTime   @default(now()) @updatedAt
 }
 
 model Question {
