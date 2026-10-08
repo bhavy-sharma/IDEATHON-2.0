@@ -1,6 +1,7 @@
 // app/(dashboard)/questions/[id]/page.jsx
 import { notFound } from 'next/navigation';
 import EditQuestionSetPage from './EditQuestionSetPage';
+export const instant = false;
 
 export default async function Page({ params }) {
   // Handle both Next 14 (sync) and Next 15 (Promise)
