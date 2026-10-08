@@ -17,8 +17,11 @@ import {
   Users,
   Copy,
   Check,
+  ShieldCheck,
+  GraduationCap,
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -31,20 +34,28 @@ export default function DashboardPage() {
   const [loadingRooms, setLoadingRooms] = useState(true);
   const [copiedCode, setCopiedCode] = useState(null);
 
+  const isHost = user?.role === 'HOST' || user?.role === 'ADMIN';
+  const isPlayer = user?.role === 'PLAYER';
+  const isAdmin = user?.role === 'ADMIN';
+
   // ---------- Redirect if not logged in ----------
   useEffect(() => {
     if (!user) router.replace('/login');
   }, [user, router]);
 
-  // ---------- Fetch recent rooms hosted by this user ----------
+  // ---------- Fetch recent rooms (HOST/ADMIN only) ----------
   useEffect(() => {
+    if (!isHost) {
+      setLoadingRooms(false);
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       try {
         const { data } = await roomApi.list();
         if (!cancelled) setRecentRooms(data.rooms || []);
       } catch {
-        // Endpoint may not exist yet — silently ignore
         if (!cancelled) setRecentRooms([]);
       } finally {
         if (!cancelled) setLoadingRooms(false);
@@ -53,7 +64,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isHost]);
 
   // ---------- Handlers ----------
   function handleJoin(e) {
@@ -96,6 +107,21 @@ export default function DashboardPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <h1 className="text-xl font-bold text-slate-900">🧠 AptiQuiz</h1>
           <div className="flex items-center gap-3">
+            {/* Role badge */}
+            <span
+              className={cn(
+                'hidden items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold sm:inline-flex',
+                isAdmin && 'bg-red-100 text-red-700',
+                user.role === 'HOST' && 'bg-amber-100 text-amber-700',
+                isPlayer && 'bg-indigo-100 text-indigo-700'
+              )}
+            >
+              {isAdmin && <ShieldCheck className="h-3 w-3" />}
+              {user.role === 'HOST' && <ShieldCheck className="h-3 w-3" />}
+              {isPlayer && <GraduationCap className="h-3 w-3" />}
+              {user.role}
+            </span>
+
             <div className="hidden text-right sm:block">
               <p className="text-sm font-medium text-slate-800">{user.name}</p>
               <p className="text-xs text-slate-500">
@@ -119,12 +145,19 @@ export default function DashboardPage() {
             Welcome back, {user.name?.split(' ')[0]} 👋
           </h2>
           <p className="text-sm text-slate-500">
-            Join a room or host your own.
+            {isHost
+              ? 'Create a room or join one as a player.'
+              : 'Enter a room code to join a quiz.'}
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* ---------- Join Room ---------- */}
+        <div
+          className={cn(
+            'grid gap-6',
+            isHost ? 'md:grid-cols-2' : 'md:grid-cols-1'
+          )}
+        >
+          {/* ---------- Join Room (everyone) ---------- */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
               <LogIn className="h-5 w-5 text-indigo-600" />
@@ -153,134 +186,153 @@ export default function DashboardPage() {
             </form>
 
             <p className="mt-3 text-center text-xs text-slate-400">
-              Ask your host for the 6-character room code.
+              Ask your teacher for the 6-character room code.
             </p>
           </div>
 
-          {/* ---------- Quick Actions ---------- */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center gap-2">
-              <Plus className="h-5 w-5 text-indigo-600" />
-              <h3 className="text-lg font-semibold text-slate-900">
-                Quick Actions
-              </h3>
-            </div>
+          {/* ---------- Host Actions (HOST/ADMIN only) ---------- */}
+          {isHost && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-4 flex items-center gap-2">
+                <Plus className="h-5 w-5 text-indigo-600" />
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Host Tools
+                </h3>
+              </div>
 
-            <div className="grid gap-2">
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() => router.push('/host/rooms/new')}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Create New Room
-              </Button>
-
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() => router.push('/questions')}
-              >
-                <BookOpen className="mr-2 h-4 w-4" />
-                Question Bank
-              </Button>
-
-              <Button
-                variant="outline"
-                className="justify-start"
-                onClick={() => router.push('/analytics')}
-              >
-                <BarChart3 className="mr-2 h-4 w-4" />
-                Analytics
-              </Button>
-            </div>
-          </div>
-        </div>
-
-        {/* ---------- Recent Rooms ---------- */}
-        <div className="mt-8">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Recent Rooms
-          </h3>
-
-          {loadingRooms ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="h-32 animate-pulse rounded-2xl border border-slate-200 bg-white"
-                />
-              ))}
-            </div>
-          ) : recentRooms.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-400">
-              No recent rooms yet. Create one to get started.
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {recentRooms.map((r) => (
-                <div
-                  key={r.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+              <div className="grid gap-2">
+                <Button
+                  variant="outline"
+                  className="justify-start"
+                  onClick={() => router.push('/host/rooms/new')}
                 >
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="font-mono text-sm font-semibold text-indigo-700">
-                      {r.code}
-                    </span>
-                    <button
-                      onClick={() => copyCode(r.code)}
-                      className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                      title="Copy code"
-                    >
-                      {copiedCode === r.code ? (
-                        <Check className="h-4 w-4 text-emerald-600" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </button>
-                  </div>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create New Room
+                </Button>
 
-                  <div className="mb-3 flex items-center gap-3 text-xs text-slate-500">
-                    <span className="flex items-center gap-1">
-                      <Users className="h-3.5 w-3.5" />
-                      {r.playerCount ?? 0}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
-                      {new Date(r.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
+                <Button
+                  variant="outline"
+                  className="justify-start"
+                  onClick={() => router.push('/questions')}
+                >
+                  <BookOpen className="mr-2 h-4 w-4" />
+                  Question Bank
+                </Button>
 
-                  <span
-                    className={
-                      'inline-block rounded-full px-2 py-0.5 text-xs font-medium ' +
-                      (r.status === 'ENDED'
-                        ? 'bg-slate-100 text-slate-600'
-                        : r.status === 'ACTIVE'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-amber-100 text-amber-700')
-                    }
-                  >
-                    {r.status}
-                  </span>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-3 w-full"
-                    onClick={() =>
-                      r.status === 'ENDED'
-                        ? router.push(`/results/${r.id}`)
-                        : router.push(`/game/${r.code}`)
-                    }
-                  >
-                    {r.status === 'ENDED' ? 'View Results' : 'Open'}
-                  </Button>
-                </div>
-              ))}
+                <Button
+                  variant="outline"
+                  className="justify-start"
+                  onClick={() => router.push('/analytics')}
+                >
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Analytics
+                </Button>
+              </div>
             </div>
           )}
         </div>
+
+        {/* ---------- Recent Rooms (HOST only) ---------- */}
+        {isHost && (
+          <div className="mt-8">
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+              Recent Rooms
+            </h3>
+
+            {loadingRooms ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-32 animate-pulse rounded-2xl border border-slate-200 bg-white"
+                  />
+                ))}
+              </div>
+            ) : recentRooms.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-400">
+                No recent rooms yet. Create one to get started.
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {recentRooms.map((r) => (
+                  <div
+                    key={r.id}
+                    className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="font-mono text-sm font-semibold text-indigo-700">
+                        {r.code}
+                      </span>
+                      <button
+                        onClick={() => copyCode(r.code)}
+                        className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                      >
+                        {copiedCode === r.code ? (
+                          <Check className="h-4 w-4 text-emerald-600" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="mb-3 flex items-center gap-3 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5" />
+                        {r.playerCount ?? 0}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" />
+                        {new Date(r.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+
+                    <span
+                      className={cn(
+                        'inline-block rounded-full px-2 py-0.5 text-xs font-medium',
+                        r.status === 'ENDED'
+                          ? 'bg-slate-100 text-slate-600'
+                          : r.status === 'ACTIVE'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-amber-100 text-amber-700'
+                      )}
+                    >
+                      {r.status}
+                    </span>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 w-full"
+                      onClick={() =>
+                        r.status === 'ENDED'
+                          ? router.push(`/results/${r.id}`)
+                          : router.push(`/game/${r.code}`)
+                      }
+                    >
+                      {r.status === 'ENDED' ? 'View Results' : 'Open'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Player info card */}
+        {isPlayer && (
+          <div className="mt-8 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5">
+            <h3 className="mb-1 text-sm font-semibold text-indigo-700">
+              How it works
+            </h3>
+            <ol className="ml-4 list-decimal space-y-1 text-sm text-slate-600">
+              <li>Your teacher will share a 6-character room code.</li>
+              <li>Enter the code above and click <strong>Join Room</strong>.</li>
+              <li>Wait in the lobby until your teacher starts the quiz.</li>
+              <li>Answer questions as fast as you can for more points.</li>
+              <li>See your score on the live leaderboard.</li>
+            </ol>
+          </div>
+        )}
       </main>
     </div>
   );
