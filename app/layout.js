@@ -1,9 +1,7 @@
+// app/layout.jsx
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
-// app/layout.jsx
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
 const inter = Inter({ subsets: ['latin'] });
 
