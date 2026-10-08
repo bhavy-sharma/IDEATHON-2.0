@@ -14,17 +14,16 @@ const COLOR_MAP = {
 export function TeamScoreBar({ teams, myTeamId }) {
   if (!teams?.length) return null;
 
-  // Sort by score descending for display order
   const sorted = [...teams].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-      <div className="flex items-center gap-3 overflow-x-auto">
+    <div className="rounded-2xl border border-slate-200 bg-white p-2 shadow-sm sm:p-3">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:gap-3">
         {sorted.map((team) => (
           <div
             key={team.id}
             className={cn(
-              'flex shrink-0 items-center gap-2 rounded-xl border-2 px-3 py-2 transition-all',
+              'flex shrink-0 items-center gap-1.5 rounded-xl border-2 px-2.5 py-1.5 transition-all sm:gap-2 sm:px-3 sm:py-2',
               team.id === myTeamId
                 ? 'border-indigo-400 bg-indigo-50'
                 : 'border-slate-200 bg-slate-50'
@@ -32,14 +31,14 @@ export function TeamScoreBar({ teams, myTeamId }) {
           >
             <span
               className={cn(
-                'h-3 w-3 rounded-full',
+                'h-2.5 w-2.5 rounded-full sm:h-3 sm:w-3',
                 COLOR_MAP[team.color] || 'bg-slate-400'
               )}
             />
-            <span className="text-sm font-medium text-slate-700">
+            <span className="whitespace-nowrap text-xs font-medium text-slate-700 sm:text-sm">
               {team.name}
             </span>
-            <span className="text-base font-bold tabular-nums text-slate-900">
+            <span className="text-sm font-bold tabular-nums text-slate-900 sm:text-base">
               {(team.score ?? 0).toLocaleString()}
             </span>
           </div>
