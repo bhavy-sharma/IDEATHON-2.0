@@ -1,59 +1,68 @@
+// app/api/questions/route.js
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
-const createQuestionSetSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  description: z.string().optional(),
-  questions: z.array(z.any()).optional(),
+const createQuestionSchema = z.object({
+  text: z.string().min(1, 'Question text is required'),
+  topic: z.string().min(1, 'Topic is required'),
+  difficulty: z.enum(['EASY', 'MEDIUM', 'HARD']),
+  timeLimit: z.number().int().positive().optional(),
+  options: z
+    .array(
+      z.object({
+        text: z.string().min(1, 'Option text required'),
+        isCorrect: z.boolean(),
+      })
+    )
+    .min(2, 'At least 2 options required'),
+  questionSetId: z.string().min(1, 'questionSetId is required'),
 });
 
 export async function POST(req) {
   try {
-    // 1. Sabse pehle RAW text padho (Yeh sabse important step hai)
     const rawText = await req.text();
-    console.log("🔥 RAW REQUEST TEXT AAYA HAI:", rawText);
+    console.log('🔥 RAW REQUEST TEXT:', rawText);
 
-    // 2. Usko JSON mein convert karo
     let body;
     try {
       body = JSON.parse(rawText);
-      console.log("✅ PARSED BODY:", body);
-    } catch (parseError) {
+    } catch {
       return NextResponse.json({ message: 'Invalid JSON format' }, { status: 400 });
     }
 
-    // 3. Ab Zod se validate karo
-    const validatedData = createQuestionSetSchema.parse(body);
+    console.log('✅ PARSED BODY:', body);
 
-    // 4. Host ID find karo
-    const tempHost = await prisma.user.findFirst();
-    const hostId = tempHost ? tempHost.id : "temp-host-id";
+    const data = createQuestionSchema.parse(body);
 
-    if (!hostId) {
-      return NextResponse.json({ message: 'No user found to act as host.' }, { status: 400 });
-    }
-
-    // 5. Database mein save karo
-    const newQuestionSet = await prisma.questionSet.create({
+    const question = await prisma.question.create({
       data: {
-        name: validatedData.name,
-        description: validatedData.description || null,
-        hostId: hostId,
+        text: data.text,
+        topic: data.topic,
+        difficulty: data.difficulty,
+        timeLimit: data.timeLimit ?? 20,
+        questionSetId: data.questionSetId,
+        options: {
+          create: data.options.map((o) => ({
+            text: o.text,
+            isCorrect: o.isCorrect,
+          })),
+        },
       },
+      include: { options: true },
     });
 
     return NextResponse.json(
-      { message: 'Question set created successfully', questionSet: newQuestionSet }, 
+      { message: 'Question created successfully', question },
       { status: 201 }
     );
-
   } catch (error) {
-    console.error("❌ FINAL ERROR:", error);
-    
+    console.error('❌ ERROR:', error);
+
     if (error instanceof z.ZodError) {
+      const issues = error.issues ?? error.errors ?? [];
       return NextResponse.json(
-        { message: error.errors[0]?.message || 'Invalid data' }, 
+        { message: issues[0]?.message || 'Invalid data' },
         { status: 400 }
       );
     }

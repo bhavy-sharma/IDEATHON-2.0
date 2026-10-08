@@ -1,19 +1,18 @@
+// app/api/questions/[id]/route.js
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function DELETE(req, { params }) {
+export async function DELETE(_req, { params }) {
   try {
-    const { id } = await params;
+    const { id } = await params; // Next.js 15
 
-    // Question delete karo (Prisma schema mein onDelete: Cascade hai, 
-    // toh iske options aur answers apne aap delete ho jayenge)
-    await prisma.question.delete({
-      where: { id },
-    });
+    // Delete options first (in case of FK constraint)
+    await prisma.option.deleteMany({ where: { questionId: id } });
+    await prisma.question.delete({ where: { id } });
 
-    return NextResponse.json({ message: 'Question deleted successfully' });
+    return NextResponse.json({ message: 'Question deleted' });
   } catch (error) {
-    console.error('Error deleting question:', error);
-    return NextResponse.json({ message: 'Failed to delete question' }, { status: 500 });
+    console.error('❌ DELETE ERROR:', error);
+    return NextResponse.json({ message: 'Delete failed' }, { status: 500 });
   }
 }
