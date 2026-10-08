@@ -1,101 +1,100 @@
+// app/api/rooms/route.js
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { customAlphabet } from 'nanoid';
 
-// Validation Schema for creating a Room
+// 6-char uppercase alphanumeric code, no ambiguous chars (0/O, 1/I/L)
+const generateRoomCode = customAlphabet('ABCDEFGHJKMNPQRSTUVWXYZ23456789', 6);
+
 const createRoomSchema = z.object({
-  hostId: z.string().min(1, 'Host ID is required'),
-  collegeId: z.string().min(1, 'College ID is required'),
-  questionSetId: z.string().min(1, 'Question Set ID is required'),
-  settings: z.record(z.any()).optional().default({}),
+  questionSetId: z.string().min(1, 'questionSetId is required'),
+  settings: z
+    .object({
+      timeLimit: z.number().int().positive().optional(),
+      scoringMode: z.enum(['STANDARD', 'SPEED', 'ACCURACY']).optional(),
+      mode: z.enum(['SOLO', 'MULTI', 'TEAM']).optional(),
+      allowSpectators: z.boolean().optional(),
+    })
+    .optional(),
 });
 
-// Helper function to generate a unique 6-character alphanumeric code
-async function generateUniqueRoomCode() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let isUnique = false;
-  let code = '';
-
-  while (!isUnique) {
-    code = '';
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    
-    const existingRoom = await prisma.room.findUnique({ where: { code } });
-    if (!existingRoom) {
-      isUnique = true;
-    }
+// Try up to 5 times in case of (unlikely) code collision
+async function createUniqueRoomCode() {
+  for (let i = 0; i < 5; i++) {
+    const code = generateRoomCode();
+    const existing = await prisma.room.findUnique({ where: { code } });
+    if (!existing) return code;
   }
-  
-  return code;
+  throw new Error('Could not generate a unique room code');
 }
 
 export async function POST(req) {
   try {
-    // 1. Raw body padh lo debugging ke liye
     const rawText = await req.text();
-    console.log("🔥 ROOM API RAW REQUEST:", rawText);
+    console.log('🔥 ROOM API RAW REQUEST:', rawText);
 
     let body;
     try {
       body = JSON.parse(rawText);
-    } catch (parseError) {
+    } catch {
       return NextResponse.json({ message: 'Invalid JSON format' }, { status: 400 });
     }
 
-    // 2. Validate incoming data
-    const validatedData = createRoomSchema.parse(body);
+    const data = createRoomSchema.parse(body);
 
-    // 3. Verify if QuestionSet exists
-    const questionSet = await prisma.questionSet.findUnique({
-      where: { id: validatedData.questionSetId },
-    });
-    if (!questionSet) {
-      return NextResponse.json({ message: 'Invalid Question Set ID' }, { status: 400 });
+    // ── Derive host from auth / fallback ──────────────────────────────
+    const host = await prisma.user.findFirst();
+    if (!host) {
+      return NextResponse.json({ message: 'No user found to act as host.' }, { status: 400 });
     }
 
-    // 4. Generate unique 6-char room code
-    const roomCode = await generateUniqueRoomCode();
+    const hostId = host.id;
+    const collegeId = host.collegeId ?? null;
 
-    // 5. Create the Room in Database
-    const newRoom = await prisma.room.create({
+    // ── Verify question set exists ────────────────────────────────────
+    const questionSet = await prisma.questionSet.findUnique({
+      where: { id: data.questionSetId },
+    });
+    if (!questionSet) {
+      return NextResponse.json({ message: 'Question set not found' }, { status: 404 });
+    }
+
+    // ── Generate unique room code ─────────────────────────────────────
+    const code = await createUniqueRoomCode();
+
+    // ── Create the room ───────────────────────────────────────────────
+    const room = await prisma.room.create({
       data: {
-        code: roomCode,
-        hostId: validatedData.hostId,
-        collegeId: validatedData.collegeId,
-        questionSetId: validatedData.questionSetId,
-        settings: validatedData.settings || {},
+        code,                                      // ✅ REQUIRED — now provided
+        hostId,
+        collegeId,
+        questionSetId: data.questionSetId,
         status: 'LOBBY',
-      },
-      include: {
-        host: { select: { id: true, name: true, email: true } },
-        college: { select: { id: true, name: true, code: true } },
-        questionSet: { select: { id: true, name: true } },
+        settings: {
+          timeLimit: data.settings?.timeLimit ?? 20,
+          scoringMode: data.settings?.scoringMode ?? 'STANDARD',
+          mode: data.settings?.mode ?? 'SOLO',
+          allowSpectators: data.settings?.allowSpectators ?? true,
+        },
       },
     });
 
     return NextResponse.json(
-      { message: 'Room created successfully', room: newRoom }, 
+      { message: 'Room created', room },
       { status: 201 }
     );
-
   } catch (error) {
-    console.error("❌ FINAL ERROR in /api/rooms:", error);
+    console.error('❌ FINAL ERROR in /api/rooms:', error);
 
-    // 🔥 Bulletproof Zod Error Handling
-    // Pehle check karo ki 'errors' array hai ya nahi
-    if (error && typeof error === 'object' && 'errors' in error && Array.isArray(error.errors)) {
+    if (error instanceof z.ZodError) {
+      const issues = error.issues ?? error.errors ?? [];
       return NextResponse.json(
-        { message: error.errors[0]?.message || 'Invalid data provided' }, 
+        { message: issues[0]?.message || 'Invalid data', issues },
         { status: 400 }
       );
     }
-    
-    // Agar Zod error nahi hai, toh normal error message bhejo
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : 'Internal server error' }, 
-      { status: 500 }
-    );
+
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }
