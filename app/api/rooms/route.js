@@ -55,7 +55,7 @@ export async function POST(req) {
         hostId: user.id,
         collegeId: user.collegeId ?? null,
         questionSetId: data.questionSetId,
-        status: 'WAITING',
+        status: 'LOBBY',
         settings: {
           timeLimit: data.settings?.timeLimit ?? 20,
           scoringMode: data.settings?.scoringMode ?? 'STANDARD',

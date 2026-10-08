@@ -1,22 +1,49 @@
-// app/api/rooms/code/[code]/route.js
+// app/api/rooms/[code]/route.js
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireUser } from '@/lib/auth';
 
-export async function GET(_req, { params }) {
+export async function GET(req, { params }) {
   try {
-    await requireUser();
-    const { code } = await params;
+    const resolvedParams = await params;
+    const { code } = resolvedParams;
+
+    if (!code) {
+      return NextResponse.json({ message: 'Room code is required' }, { status: 400 });
+    }
 
     const room = await prisma.room.findUnique({
-      where: { code: code.toUpperCase() },
+      where: { code },
       include: {
-        questionSet: {
-          include: {
-            questions: {
-              include: { options: true },
-              orderBy: { createdAt: 'asc' },
-            },
+        host: { 
+          select: { 
+            id: true, 
+            name: true,
+            email: true 
+          } 
+        },
+        college: { 
+          select: { 
+            id: true, 
+            name: true, 
+            code: true 
+          } 
+        },
+        questionSet: { 
+          select: { 
+            id: true, 
+            name: true 
+          } 
+        },
+        players: {
+          orderBy: { 
+            score: 'desc' 
+          },
+          select: {
+            id: true,
+            name: true,
+            score: true,
+            accuracy: true,
+            avgTime: true,
           },
         },
       },
@@ -25,10 +52,10 @@ export async function GET(_req, { params }) {
     if (!room) {
       return NextResponse.json({ message: 'Room not found' }, { status: 404 });
     }
-    return NextResponse.json({ room });
+
+    return NextResponse.json({ room }, { status: 200 });
   } catch (error) {
-    if (error.status === 401)
-      return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
+    console.error('❌ Error fetching room:', error);
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }

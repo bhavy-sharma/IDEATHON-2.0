@@ -1,23 +1,32 @@
 // app/api/rooms/[id]/route.js
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { requireUser } from '@/lib/auth';
 
-export async function GET(_req, { params }) {
+export async function GET(req, { params }) {
   try {
-    await requireUser(); // must be logged in
-    const { id } = await params;
+    // Next.js 15 compatibility: await params
+    const resolvedParams = await params;
+    const { id } = resolvedParams;
+
+    if (!id) {
+      return NextResponse.json({ message: 'Room ID is required' }, { status: 400 });
+    }
 
     const room = await prisma.room.findUnique({
       where: { id },
       include: {
-        questionSet: {
-          include: {
-            questions: {
-              include: { options: true },
-              orderBy: { createdAt: 'asc' },
-            },
-          },
+        host: { select: { id: true, name: true, email: true } },
+        college: { select: { id: true, name: true, code: true } },
+        questionSet: { select: { id: true, name: true } },
+        players: { 
+          orderBy: { score: 'desc' }, // ✅ Ensures top player is always index 0
+          select: { 
+            id: true, 
+            name: true, 
+            score: true, 
+            accuracy: true, 
+            avgTime: true 
+          } 
         },
       },
     });
@@ -26,12 +35,9 @@ export async function GET(_req, { params }) {
       return NextResponse.json({ message: 'Room not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ room });
+    return NextResponse.json({ room }, { status: 200 });
   } catch (error) {
-    if (error.status === 401) {
-      return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
-    }
-    console.error('❌ GET /api/rooms/[id] ERROR:', error);
+    console.error('❌ Error fetching room:', error);
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }
