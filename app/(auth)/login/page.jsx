@@ -153,11 +153,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Test credentials hint */}
-          <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3 text-center text-xs text-slate-600">
-            <strong className="text-indigo-700">Demo accounts:</strong>{' '}
-            host@test.com or player@test.com · password123
-          </div>
+          
         </div>
       </main>
 
