@@ -1,70 +1,32 @@
-// src/app/api/auth/login/route.js
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
-import { generateTokens } from '@/lib/jwt';
-import { z } from 'zod';
-
-const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
-});
 
 export async function POST(req) {
   try {
-    const body = await req.json();
-    const validatedData = loginSchema.parse(body);
+    const { email, password } = await req.json();
 
-    const user = await prisma.user.findUnique({
-      where: { email: validatedData.email },
-      include: { college: true },
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
+
+    const res = NextResponse.json({
+      user: { id: user.id, email: user.email, name: user.name },
     });
 
-    if (!user) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-    }
-
-    const isPasswordValid = await bcrypt.compare(validatedData.password, user.passwordHash);
-    if (!isPasswordValid) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-    }
-
-    // Tokens generate karo
-    const { accessToken, refreshToken } = generateTokens({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      collegeId: user.collegeId,
-    });
-
-    // ✅ FIX: accessToken ko bhi response body mein bhejo
-    const response = NextResponse.json({
-      message: 'Login successful',
-      accessToken, // 👈 Ye add kiya
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        college: user.college.name,
-      },
-    });
-
-    // Refresh token cookie mein set karo
-    response.cookies.set('refreshToken', refreshToken, {
+    res.cookies.set('userId', user.id, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60, // 7 days
       path: '/',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7,
+      secure: process.env.NODE_ENV === 'production',
     });
 
-    return response;
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
-    }
-    console.error('Login error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return res;
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }
 }
