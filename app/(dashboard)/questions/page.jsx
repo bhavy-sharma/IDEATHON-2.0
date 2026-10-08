@@ -4,23 +4,28 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { questionApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Plus, BookOpen, Loader2 } from 'lucide-react';
+import { Plus, BookOpen } from 'lucide-react';
+import { QuestionsSkeleton } from '@/components/ui/Skeletons';
 
 export default function QuestionsPage() {
   const [sets, setSets] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const { data } = await questionApi.getSets(1, 50);
-        setSets(data.sets || []);
+        if (!cancelled) setSets(data.sets || []);
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -44,10 +49,7 @@ export default function QuestionsPage() {
 
       <main className="mx-auto max-w-5xl px-4 py-8">
         {loading ? (
-          <div className="flex items-center justify-center py-20 text-slate-500">
-            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            Loading…
-          </div>
+          <QuestionsSkeleton />
         ) : sets.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
             <h2 className="mb-2 text-lg font-semibold text-slate-700">

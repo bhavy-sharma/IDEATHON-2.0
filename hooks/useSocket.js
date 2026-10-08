@@ -18,6 +18,7 @@ export function useSocket() {
 
   const {
     // Core game
+    setRoom,
     setPlayers,
     setStatus,
     setQuestion,
@@ -26,7 +27,6 @@ export function useSocket() {
     setEndTime,
     revealAnswer,
     updatePlayerReady,
-    setRoom,
 
     // Teams
     setTeams,
@@ -98,6 +98,15 @@ export function useSocket() {
     // ---------- Questions ----------
 
     socket.on('question_start', (data) => {
+      // Toast on first question only
+      if (data.questionIndex === 0) {
+        toast({
+          title: '🚀 Game started!',
+          description: 'Good luck!',
+          duration: 2000,
+        });
+      }
+
       setQuestion({
         id: data.questionId,
         text: data.text,
@@ -118,6 +127,21 @@ export function useSocket() {
     socket.on('question_reveal', (data) => {
       revealAnswer(data.correctOptionId, data.leaderboard || []);
       setStatus('REVEAL');
+
+      // Show correct/wrong toast if the player had answered
+      const gameState = useGameStore.getState();
+      const wasCorrect = gameState.selectedOptionId === data.correctOptionId;
+
+      if (gameState.selectedOptionId) {
+        toast({
+          title: wasCorrect ? '✓ Correct!' : '✗ Wrong answer',
+          description: wasCorrect
+            ? 'Points added to your score'
+            : 'Better luck next question',
+          duration: 2500,
+          variant: wasCorrect ? 'default' : 'destructive',
+        });
+      }
     });
 
     // ---------- Players ----------
@@ -127,11 +151,11 @@ export function useSocket() {
     });
 
     socket.on('player_joined', (data) => {
-      // Optional: toast when someone joins
       if (data?.name) {
         toast({
-          title: 'Player joined',
+          title: '👋 Player joined',
           description: data.name,
+          duration: 2000,
         });
       }
     });
@@ -166,6 +190,11 @@ export function useSocket() {
       if (data?.teamLeaderboard) {
         setTeamLeaderboard(data.teamLeaderboard);
       }
+      toast({
+        title: '🏁 Game ended',
+        description: 'Check the final standings!',
+        duration: 3000,
+      });
     });
 
     // ---------- Reconnect token ----------
@@ -241,7 +270,6 @@ export function useSocket() {
   return {
     socket: socketRef.current,
     isConnected,
-    // Actions
     joinRoom,
     leaveRoom,
     toggleReady,
