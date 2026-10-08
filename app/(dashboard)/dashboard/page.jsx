@@ -6,6 +6,7 @@ import { useUserStore } from '@/store/userStore';
 import { authApi, roomApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DashboardSkeleton } from '@/components/ui/Skeletons';
 import {
   Plus,
   LogIn,
@@ -40,7 +41,7 @@ export default function DashboardPage() {
     let cancelled = false;
     (async () => {
       try {
-        const { data } = await roomApi.list?.() ?? { data: { rooms: [] } };
+        const { data } = await roomApi.list();
         if (!cancelled) setRecentRooms(data.rooms || []);
       } catch {
         // Endpoint may not exist yet — silently ignore
@@ -77,7 +78,7 @@ export default function DashboardPage() {
     try {
       await navigator.clipboard.writeText(code);
       setCopiedCode(code);
-      toast({ title: 'Room code copied' });
+      toast({ title: 'Room code copied', duration: 1500 });
       setTimeout(() => setCopiedCode(null), 1500);
     } catch {
       toast({ title: 'Copy failed', variant: 'destructive' });
@@ -85,11 +86,7 @@ export default function DashboardPage() {
   }
 
   if (!user) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
@@ -207,8 +204,13 @@ export default function DashboardPage() {
           </h3>
 
           {loadingRooms ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-400">
-              Loading…
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="h-32 animate-pulse rounded-2xl border border-slate-200 bg-white"
+                />
+              ))}
             </div>
           ) : recentRooms.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-400">
@@ -266,9 +268,13 @@ export default function DashboardPage() {
                     variant="outline"
                     size="sm"
                     className="mt-3 w-full"
-                    onClick={() => router.push(`/game/${r.code}`)}
+                    onClick={() =>
+                      r.status === 'ENDED'
+                        ? router.push(`/results/${r.id}`)
+                        : router.push(`/game/${r.code}`)
+                    }
                   >
-                    Open
+                    {r.status === 'ENDED' ? 'View Results' : 'Open'}
                   </Button>
                 </div>
               ))}

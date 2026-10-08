@@ -14,8 +14,11 @@ import { TeamCard } from '@/components/game/TeamCard';
 import { TeamLeaderboard } from '@/components/game/TeamLeaderboard';
 import { TeamAssignmentPanel } from '@/components/game/TeamAssignmentPanel';
 import { TeamScoreBar } from '@/components/game/TeamScoreBar';
+import { ShareRoomPanel } from '@/components/game/ShareRoomPanel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { GameLobbySkeleton } from '@/components/ui/Skeletons';
 
 export default function GameRoomPage() {
   const params = useParams();
@@ -64,6 +67,12 @@ export default function GameRoomPage() {
 
   const isHost = user?.role === 'HOST' || user?.id === room?.hostId;
   const isTeamMode = mode === 'TEAM';
+
+  // Derive whether current player is ready
+  const myPlayer = players.find(
+    (p) => p.userId === user?.id || p.name === user?.name
+  );
+  const myReady = myPlayer?.isReady || false;
 
   // Reset store when leaving
   useEffect(() => {
@@ -140,14 +149,19 @@ export default function GameRoomPage() {
     );
   }
 
-  // ---------- Connecting ----------
+  // ---------- Connecting (skeleton) ----------
   if (!isConnected) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-600" />
-          <p className="text-slate-600">Connecting to room…</p>
-        </div>
+      <div className="min-h-screen bg-slate-50">
+        <header className="border-b border-slate-200 bg-white">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+            <Skeleton className="h-6 w-40" />
+            <Skeleton className="h-4 w-24" />
+          </div>
+        </header>
+        <main className="mx-auto max-w-6xl px-4 py-6">
+          <GameLobbySkeleton />
+        </main>
       </div>
     );
   }
@@ -177,6 +191,16 @@ export default function GameRoomPage() {
                 SPECTATOR
               </span>
             )}
+            {!isSpectator && !isHost && status === 'LOBBY' && (
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                PLAYER
+              </span>
+            )}
+            {isHost && (
+              <span className="rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+                HOST
+              </span>
+            )}
           </div>
           <span className="text-sm text-slate-500">
             {status === 'LOBBY' && 'Lobby'}
@@ -189,7 +213,7 @@ export default function GameRoomPage() {
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-6">
-        {/* ---------- TEAM SCORE BAR (always visible in team mode) ---------- */}
+        {/* Team score bar (only during play) */}
         {isTeamMode && teams.length > 0 && status !== 'LOBBY' && (
           <TeamScoreBar teams={teams} myTeamId={myTeamId} />
         )}
@@ -197,19 +221,17 @@ export default function GameRoomPage() {
         {/* ---------- LOBBY ---------- */}
         {status === 'LOBBY' && (
           <div className="space-y-6">
-            {/* Team assignment (host) or team preview (players) */}
+            {/* Team assignment panel */}
             {isTeamMode && (
               <TeamAssignmentPanel
                 players={players}
                 teams={teams}
                 isHost={isHost}
-                onAssign={({ teams: newTeams }) => {
-                  assignTeams(newTeams);
-                }}
+                onAssign={({ teams: newTeams }) => assignTeams(newTeams)}
               />
             )}
 
-            {/* Teams grid (if assigned) */}
+            {/* Team cards grid */}
             {isTeamMode && teams.length > 0 && (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {teams.map((team) => (
@@ -223,7 +245,7 @@ export default function GameRoomPage() {
               </div>
             )}
 
-            {/* Players list (solo mode, or below teams) */}
+            {/* Players list (solo mode) */}
             {!isTeamMode && (
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
@@ -238,21 +260,42 @@ export default function GameRoomPage() {
               </div>
             )}
 
-            {/* Host controls */}
-            {!isSpectator && (
-              <div className="flex items-center justify-center gap-4">
-                <Button variant="outline" size="lg" onClick={toggleReady}>
-                  Toggle Ready
+            {/* Share panel — host only */}
+            {!isSpectator && isHost && <ShareRoomPanel code={code} />}
+
+            {/* Player: Toggle Ready */}
+            {!isSpectator && !isHost && (
+              <div className="flex flex-col items-center gap-2">
+                <Button
+                  variant={myReady ? 'default' : 'outline'}
+                  size="lg"
+                  onClick={toggleReady}
+                >
+                  {myReady ? '✓ Ready' : 'Toggle Ready'}
                 </Button>
+                <p className="text-sm text-slate-500">
+                  Waiting for the host to start the game…
+                </p>
+              </div>
+            )}
+
+            {/* Host: Start Game only */}
+            {!isSpectator && isHost && (
+              <div className="flex flex-col items-center gap-2">
                 <Button
                   size="lg"
                   onClick={startGame}
                   disabled={
-                    isTeamMode && teams.length === 0
+                    players.length < 1 || (isTeamMode && teams.length === 0)
                   }
+                  className="px-12"
                 >
                   Start Game
                 </Button>
+                <p className="text-xs text-slate-400">
+                  {players.length} player{players.length !== 1 ? 's' : ''} in
+                  lobby
+                </p>
               </div>
             )}
 
@@ -335,7 +378,6 @@ export default function GameRoomPage() {
               </div>
             </div>
 
-            {/* Sidebar */}
             <aside className="space-y-4">
               {isTeamMode ? (
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -401,7 +443,6 @@ export default function GameRoomPage() {
         {/* ---------- ENDED ---------- */}
         {status === 'ENDED' && (
           <div className="mx-auto max-w-2xl space-y-6">
-            {/* Winner banner */}
             {isTeamMode && teamLeaderboard.length > 0 && (
               <div className="rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-white p-8 text-center shadow-sm">
                 <p className="mb-1 text-sm font-medium uppercase tracking-wide text-amber-700">
@@ -434,12 +475,21 @@ export default function GameRoomPage() {
               )}
             </div>
 
-            <Button
-              className="w-full"
-              onClick={() => router.push('/dashboard')}
-            >
-              Back to Dashboard
-            </Button>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => router.push('/dashboard')}
+              >
+                Back to Dashboard
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => router.push(`/results/${room?.id}`)}
+              >
+                View Full Results
+              </Button>
+            </div>
           </div>
         )}
       </main>

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ArrowLeft } from 'lucide-react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -15,6 +16,7 @@ import {
   CartesianGrid,
   Cell,
 } from 'recharts';
+import { cn } from '@/lib/utils';
 
 export default function RoomAnalyticsPage() {
   const { id } = useParams();
@@ -24,30 +26,52 @@ export default function RoomAnalyticsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const res = await api.get(`/analytics/room/${id}`);
-        setData(res.data);
+        if (!cancelled) setData(res.data);
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
+  // ---------- Skeleton ----------
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-slate-500">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading analytics…
+      <div className="min-h-screen bg-slate-50">
+        <header className="border-b border-slate-200 bg-white">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4">
+            <Skeleton className="h-8 w-8 rounded-md" />
+            <Skeleton className="h-6 w-48" />
+          </div>
+        </header>
+        <main className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+          <div className="grid gap-4 sm:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-24 rounded-2xl" />
+            ))}
+          </div>
+          <Skeleton className="h-72 rounded-2xl" />
+          <Skeleton className="h-64 rounded-2xl" />
+        </main>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-slate-500">
-        No data available.
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-4">
+        <p className="text-slate-500">No data available.</p>
+        <Button onClick={() => router.push('/analytics')}>
+          Back to Analytics
+        </Button>
       </div>
     );
   }
@@ -65,9 +89,19 @@ export default function RoomAnalyticsPage() {
           <Button variant="ghost" size="sm" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-lg font-semibold text-slate-900">
-            Room Analytics
-          </h1>
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900">
+              Room Analytics
+            </h1>
+            {data.room?.code && (
+              <p className="text-xs text-slate-500">
+                Room{' '}
+                <span className="font-mono font-semibold text-indigo-600">
+                  {data.room.code}
+                </span>
+              </p>
+            )}
+          </div>
         </div>
       </header>
 
@@ -158,13 +192,13 @@ export default function RoomAnalyticsPage() {
                   </td>
                   <td className="px-4 py-3 text-right font-semibold tabular-nums">
                     <span
-                      className={
+                      className={cn(
                         q.accuracy >= 0.7
                           ? 'text-emerald-600'
                           : q.accuracy >= 0.4
                           ? 'text-amber-600'
                           : 'text-red-600'
-                      }
+                      )}
                     >
                       {Math.round(q.accuracy * 100)}%
                     </span>
@@ -190,10 +224,10 @@ function SummaryCard({ label, value, color }) {
   };
   return (
     <div
-      className={
-        'rounded-2xl border bg-gradient-to-br p-5 shadow-sm ' +
+      className={cn(
+        'rounded-2xl border bg-gradient-to-br p-5 shadow-sm',
         colors[color]
-      }
+      )}
     >
       <p className="text-xs font-medium uppercase tracking-wide opacity-70">
         {label}
