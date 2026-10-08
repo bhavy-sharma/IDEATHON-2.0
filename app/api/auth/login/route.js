@@ -1,3 +1,4 @@
+// src/app/api/auth/login/route.js
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
@@ -28,6 +29,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
     }
 
+    // Tokens generate karo
     const { accessToken, refreshToken } = generateTokens({
       userId: user.id,
       email: user.email,
@@ -35,8 +37,10 @@ export async function POST(req) {
       collegeId: user.collegeId,
     });
 
+    // ✅ FIX: accessToken ko bhi response body mein bhejo
     const response = NextResponse.json({
       message: 'Login successful',
+      accessToken, // 👈 Ye add kiya
       user: {
         id: user.id,
         name: user.name,
@@ -46,11 +50,12 @@ export async function POST(req) {
       },
     });
 
+    // Refresh token cookie mein set karo
     response.cookies.set('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60,
+      maxAge: 7 * 24 * 60 * 60, // 7 days
       path: '/',
     });
 

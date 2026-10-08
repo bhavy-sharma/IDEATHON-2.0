@@ -23,12 +23,21 @@ export async function POST(req) {
       return NextResponse.json({ error: 'User already exists' }, { status: 409 });
     }
 
-    const college = await prisma.college.findUnique({
-      where: { code: validatedData.collegeCode.toUpperCase() },
+    const upperCaseCode = validatedData.collegeCode.toUpperCase();
+
+    // 1. Check if college exists
+    let college = await prisma.college.findUnique({
+      where: { code: upperCaseCode },
     });
 
+    
     if (!college) {
-      return NextResponse.json({ error: 'Invalid college code' }, { status: 400 });
+      college = await prisma.college.create({
+        data: {
+          code: upperCaseCode,
+          name: `${upperCaseCode} College`, 
+        },
+      });
     }
 
     const passwordHash = await bcrypt.hash(validatedData.password, 10);
