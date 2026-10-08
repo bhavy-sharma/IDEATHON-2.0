@@ -10,6 +10,10 @@ import { OptionCard } from '@/components/game/OptionCard';
 import { Timer } from '@/components/game/Timer';
 import { Leaderboard } from '@/components/game/Leaderboard';
 import { PlayerList } from '@/components/game/PlayerList';
+import { TeamCard } from '@/components/game/TeamCard';
+import { TeamLeaderboard } from '@/components/game/TeamLeaderboard';
+import { TeamAssignmentPanel } from '@/components/game/TeamAssignmentPanel';
+import { TeamScoreBar } from '@/components/game/TeamScoreBar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -29,6 +33,7 @@ export default function GameRoomPage() {
     toggleReady,
     startGame,
     submitAnswer,
+    assignTeams,
   } = useSocket();
 
   useReconnect();
@@ -45,6 +50,10 @@ export default function GameRoomPage() {
     hasAnswered,
     correctOptionId,
     leaderboard,
+    mode,
+    teams,
+    myTeamId,
+    teamLeaderboard,
     selectOption,
     markAnswered,
     reset,
@@ -53,12 +62,15 @@ export default function GameRoomPage() {
   const [guestName, setGuestName] = useState('');
   const [joined, setJoined] = useState(false);
 
-  // Reset the game store when leaving the room
+  const isHost = user?.role === 'HOST' || user?.id === room?.hostId;
+  const isTeamMode = mode === 'TEAM';
+
+  // Reset store when leaving
   useEffect(() => {
     return () => reset();
   }, [reset]);
 
-  // Join the room once connected
+  // Join room
   useEffect(() => {
     if (!isConnected || joined) return;
 
@@ -75,7 +87,7 @@ export default function GameRoomPage() {
     setJoined(true);
   }, [isConnected, joined, isSpectator, user, guestName, code, joinRoom]);
 
-  // Keyboard shortcuts A / B / C / D
+  // Keyboard shortcuts
   useEffect(() => {
     if (isSpectator) return;
     if (status !== 'ACTIVE' || hasAnswered || !currentQuestion) return;
@@ -102,7 +114,7 @@ export default function GameRoomPage() {
     markAnswered,
   ]);
 
-  // ---------- Guest name gate (players only) ----------
+  // ---------- Guest name gate ----------
   if (!isSpectator && !user && !guestName) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
@@ -155,8 +167,13 @@ export default function GameRoomPage() {
             <span className="rounded-md bg-indigo-50 px-2 py-1 font-mono text-xs font-semibold text-indigo-700">
               {code}
             </span>
-            {isSpectator && (
+            {isTeamMode && (
               <span className="rounded-md bg-purple-100 px-2 py-1 text-xs font-semibold text-purple-700">
+                TEAM BATTLE
+              </span>
+            )}
+            {isSpectator && (
+              <span className="rounded-md bg-slate-200 px-2 py-1 text-xs font-semibold text-slate-700">
                 SPECTATOR
               </span>
             )}
@@ -171,31 +188,78 @@ export default function GameRoomPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6">
+        {/* ---------- TEAM SCORE BAR (always visible in team mode) ---------- */}
+        {isTeamMode && teams.length > 0 && status !== 'LOBBY' && (
+          <TeamScoreBar teams={teams} myTeamId={myTeamId} />
+        )}
+
         {/* ---------- LOBBY ---------- */}
         {status === 'LOBBY' && (
           <div className="space-y-6">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-slate-900">
-                  Waiting for players…
-                </h2>
-                <span className="text-sm text-slate-500">
-                  {players.length} joined
-                </span>
-              </div>
-              <PlayerList players={players} />
-            </div>
+            {/* Team assignment (host) or team preview (players) */}
+            {isTeamMode && (
+              <TeamAssignmentPanel
+                players={players}
+                teams={teams}
+                isHost={isHost}
+                onAssign={({ teams: newTeams }) => {
+                  assignTeams(newTeams);
+                }}
+              />
+            )}
 
+            {/* Teams grid (if assigned) */}
+            {isTeamMode && teams.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {teams.map((team) => (
+                  <TeamCard
+                    key={team.id}
+                    team={team}
+                    players={players}
+                    isMyTeam={team.id === myTeamId}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Players list (solo mode, or below teams) */}
+            {!isTeamMode && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-slate-900">
+                    Waiting for players…
+                  </h2>
+                  <span className="text-sm text-slate-500">
+                    {players.length} joined
+                  </span>
+                </div>
+                <PlayerList players={players} />
+              </div>
+            )}
+
+            {/* Host controls */}
             {!isSpectator && (
               <div className="flex items-center justify-center gap-4">
                 <Button variant="outline" size="lg" onClick={toggleReady}>
                   Toggle Ready
                 </Button>
-                <Button size="lg" onClick={startGame}>
+                <Button
+                  size="lg"
+                  onClick={startGame}
+                  disabled={
+                    isTeamMode && teams.length === 0
+                  }
+                >
                   Start Game
                 </Button>
               </div>
+            )}
+
+            {isTeamMode && teams.length === 0 && isHost && (
+              <p className="text-center text-sm text-amber-600">
+                Assign teams before starting.
+              </p>
             )}
           </div>
         )}
@@ -203,7 +267,6 @@ export default function GameRoomPage() {
         {/* ---------- ACTIVE / REVEAL ---------- */}
         {(status === 'ACTIVE' || status === 'REVEAL') && currentQuestion && (
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-            {/* Question area */}
             <div className="space-y-6">
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <div className="mb-4">
@@ -272,34 +335,64 @@ export default function GameRoomPage() {
               </div>
             </div>
 
-            {/* Leaderboard sidebar */}
+            {/* Sidebar */}
             <aside className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                  Leaderboard
-                </h3>
-                <Leaderboard entries={leaderboard} compact />
-              </div>
+              {isTeamMode ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Team Standings
+                  </h3>
+                  <TeamLeaderboard
+                    entries={teamLeaderboard}
+                    myTeamId={myTeamId}
+                    compact
+                  />
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+                    Leaderboard
+                  </h3>
+                  <Leaderboard entries={leaderboard} compact />
+                </div>
+              )}
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                  Players ({players.length})
+                  {isTeamMode ? 'Your Team' : 'Players'}
                 </h3>
-                <div className="space-y-1.5">
-                  {players.slice(0, 8).map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="truncate text-slate-700">
-                        {p.name}
-                      </span>
-                      <span className="font-semibold tabular-nums text-slate-500">
-                        {p.score}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+
+                {isTeamMode ? (
+                  (() => {
+                    const myTeam = teams.find((t) => t.id === myTeamId);
+                    if (!myTeam) return null;
+                    return (
+                      <TeamCard
+                        team={myTeam}
+                        players={players}
+                        isMyTeam
+                        showScore
+                        compact
+                      />
+                    );
+                  })()
+                ) : (
+                  <div className="space-y-1.5">
+                    {players.slice(0, 8).map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="truncate text-slate-700">
+                          {p.name}
+                        </span>
+                        <span className="font-semibold tabular-nums text-slate-500">
+                          {p.score}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </aside>
           </div>
@@ -307,13 +400,38 @@ export default function GameRoomPage() {
 
         {/* ---------- ENDED ---------- */}
         {status === 'ENDED' && (
-          <div className="mx-auto max-w-xl space-y-6">
+          <div className="mx-auto max-w-2xl space-y-6">
+            {/* Winner banner */}
+            {isTeamMode && teamLeaderboard.length > 0 && (
+              <div className="rounded-2xl border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-white p-8 text-center shadow-sm">
+                <p className="mb-1 text-sm font-medium uppercase tracking-wide text-amber-700">
+                  🏆 Winning Team
+                </p>
+                <h2 className="text-3xl font-bold text-slate-900">
+                  {teamLeaderboard[0].teamName}
+                </h2>
+                <p className="mt-2 text-lg font-semibold text-amber-700 tabular-nums">
+                  {teamLeaderboard[0].score.toLocaleString()} pts
+                </p>
+              </div>
+            )}
+
             <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
               <h2 className="mb-2 text-3xl font-bold text-slate-900">
                 🎉 Game Over
               </h2>
-              <p className="mb-6 text-slate-500">Final standings</p>
-              <Leaderboard entries={leaderboard} />
+              <p className="mb-6 text-slate-500">
+                {isTeamMode ? 'Final team standings' : 'Final standings'}
+              </p>
+
+              {isTeamMode ? (
+                <TeamLeaderboard
+                  entries={teamLeaderboard}
+                  myTeamId={myTeamId}
+                />
+              ) : (
+                <Leaderboard entries={leaderboard} />
+              )}
             </div>
 
             <Button
@@ -322,13 +440,6 @@ export default function GameRoomPage() {
             >
               Back to Dashboard
             </Button>
-          </div>
-        )}
-
-        {/* ---------- Fallback (no room / unknown status) ---------- */}
-        {!room && status === 'LOBBY' && players.length === 0 && (
-          <div className="mt-6 text-center text-sm text-slate-400">
-            Waiting for room state…
           </div>
         )}
       </main>
