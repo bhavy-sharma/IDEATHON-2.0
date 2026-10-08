@@ -14,21 +14,17 @@ const COLOR_DOT = {
   pink: 'bg-pink-500',
 };
 
-export function TeamLeaderboard({
-  entries = [],
-  myTeamId,
-  compact,
-}) {
+export function TeamLeaderboard({ entries = [], myTeamId, compact }) {
   if (entries.length === 0) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-xs text-slate-500 sm:p-6 sm:text-sm">
         No team scores yet
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5 sm:space-y-2">
       {entries.slice(0, compact ? 5 : 10).map((entry, idx) => {
         const Icon = RANK_ICONS[idx];
         const isMine = entry.teamId === myTeamId;
@@ -37,7 +33,7 @@ export function TeamLeaderboard({
           <div
             key={entry.teamId}
             className={cn(
-              'flex items-center gap-3 rounded-lg border p-3 transition-all',
+              'flex items-center gap-2 rounded-lg border p-2 transition-all sm:gap-3 sm:p-3',
               isMine
                 ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-200'
                 : 'border-slate-200 bg-white',
@@ -47,33 +43,33 @@ export function TeamLeaderboard({
           >
             <div
               className={cn(
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold',
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold sm:h-8 sm:w-8 sm:text-sm',
                 idx === 0 && 'bg-amber-400 text-white',
                 idx === 1 && 'bg-slate-300 text-slate-700',
                 idx === 2 && 'bg-amber-600/70 text-white',
                 idx > 2 && 'bg-slate-100 text-slate-600'
               )}
             >
-              {Icon ? <Icon className="h-4 w-4" /> : entry.rank}
+              {Icon ? <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : entry.rank}
             </div>
 
             <span
               className={cn(
-                'h-3 w-3 shrink-0 rounded-full',
+                'h-2.5 w-2.5 shrink-0 rounded-full sm:h-3 sm:w-3',
                 COLOR_DOT[entry.color] || 'bg-slate-400'
               )}
             />
 
-            <span className="flex-1 truncate font-medium text-slate-800">
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">
               {entry.teamName}
               {isMine && (
-                <span className="ml-2 text-xs font-semibold text-indigo-600">
-                  (Your team)
+                <span className="ml-1 text-[10px] font-semibold text-indigo-600 sm:ml-2 sm:text-xs">
+                  (You)
                 </span>
               )}
             </span>
 
-            <span className="font-bold tabular-nums text-slate-900">
+            <span className="text-sm font-bold tabular-nums text-slate-900 sm:text-base">
               {(entry.score ?? 0).toLocaleString()}
             </span>
           </div>
