@@ -341,7 +341,7 @@ export default function DashboardPage() {
                   </div>
                   <Button
                     variant="ghost"
-                    onClick={() => router.push(`/room/${room.id}`)}
+                    onClick={() => router.push(`/room/${room.code}`)}
                   >
                     Open
                   </Button>
