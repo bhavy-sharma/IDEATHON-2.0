@@ -4,21 +4,61 @@ const initialState = {
   room: null,
   players: [],
   status: 'LOBBY',
+
+  // Question
   currentQuestion: null,
   questionIndex: 0,
   totalQuestions: 0,
   endTime: null,
+
+  // Answer state
   selectedOptionId: null,
   hasAnswered: false,
   correctOptionId: null,
+
+  // Leaderboard (solo mode)
   leaderboard: [],
+
+  // Teams
+  mode: 'SOLO', // 'SOLO' | 'TEAM'
+  teams: [], // [{ id, name, color, memberIds: [], score, rank }]
+  myTeamId: null,
+
+  // Team leaderboard
+  teamLeaderboard: [], // [{ teamId, teamName, color, score, rank }]
 };
 
 export const useGameStore = create((set, get) => ({
   ...initialState,
 
-  setRoom: (room) => set({ room }),
-  setPlayers: (players) => set({ players }),
+  setRoom: (room) =>
+    set({
+      room,
+      mode: room?.settings?.mode || 'SOLO',
+    }),
+
+  setPlayers: (players) => {
+    const mode = get().mode;
+    // In team mode, players have a teamId; group them
+    if (mode === 'TEAM') {
+      const byTeam = new Map();
+      players.forEach((p) => {
+        if (!p.teamId) return;
+        if (!byTeam.has(p.teamId)) byTeam.set(p.teamId, []);
+        byTeam.get(p.teamId).push(p);
+      });
+      set((state) => ({
+        players,
+        teams: state.teams.map((t) => ({
+          ...t,
+          memberIds: byTeam.get(t.id)?.map((p) => p.id) || [],
+        })),
+      }));
+    } else {
+      set({ players });
+    }
+  },
+
   setStatus: (status) => set({ status }),
 
   setQuestion: (question) =>
@@ -51,6 +91,21 @@ export const useGameStore = create((set, get) => ({
     })),
 
   updateLeaderboard: (leaderboard) => set({ leaderboard }),
+
+  // ---------- Teams ----------
+
+  setTeams: (teams) => set({ teams }),
+
+  setMyTeamId: (myTeamId) => set({ myTeamId }),
+
+  setTeamLeaderboard: (teamLeaderboard) => set({ teamLeaderboard }),
+
+  updateTeamScore: (teamId, score) =>
+    set((state) => ({
+      teams: state.teams.map((t) =>
+        t.id === teamId ? { ...t, score } : t
+      ),
+    })),
 
   reset: () => set(initialState),
 }));

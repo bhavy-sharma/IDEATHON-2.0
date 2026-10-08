@@ -4,6 +4,8 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useUserStore } from '@/store/userStore';
 import { useGameStore } from '@/store/gameStore';
+import { toast } from '@/components/ui/use-toast';
+import { saveReconnectToken } from '@/hooks/useReconnect';
 
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:4000';
@@ -15,6 +17,7 @@ export function useSocket() {
   const accessToken = useUserStore((s) => s.accessToken);
 
   const {
+    // Core game
     setPlayers,
     setStatus,
     setQuestion,
@@ -23,7 +26,18 @@ export function useSocket() {
     setEndTime,
     revealAnswer,
     updatePlayerReady,
+    setRoom,
+
+    // Teams
+    setTeams,
+    setMyTeamId,
+    setTeamLeaderboard,
+    updateTeamScore,
   } = useGameStore();
+
+  // ============================================
+  // Initialize socket connection
+  // ============================================
 
   useEffect(() => {
     if (!accessToken) return;
@@ -37,6 +51,8 @@ export function useSocket() {
     });
 
     socketRef.current = socket;
+
+    // ---------- Connection lifecycle ----------
 
     socket.on('connect', () => {
       console.log('[Socket] Connected:', socket.id);
@@ -53,15 +69,33 @@ export function useSocket() {
       setIsConnected(false);
     });
 
-    // ---------- Server → Client ----------
+    // ---------- Room ----------
 
     socket.on('room_state', (data) => {
-      setPlayers(data.players);
+      if (data.room) setRoom(data.room);
+      setPlayers(data.players || []);
       setStatus(data.status);
-      setQuestionIndex(data.currentQuestionIndex);
-      setTotalQuestions(data.totalQuestions);
-      if (data.currentQuestion) setQuestion(data.currentQuestion);
+      setQuestionIndex(data.currentQuestionIndex ?? 0);
+      setTotalQuestions(data.totalQuestions ?? 0);
+
+      if (data.currentQuestion) {
+        setQuestion(data.currentQuestion);
+      }
+
+      // Hydrate teams if provided
+      if (data.teams) setTeams(data.teams);
+      if (data.myTeamId) setMyTeamId(data.myTeamId);
     });
+
+    socket.on('room_error', (data) => {
+      toast({
+        title: 'Room error',
+        description: data?.message || 'Something went wrong.',
+        variant: 'destructive',
+      });
+    });
+
+    // ---------- Questions ----------
 
     socket.on('question_start', (data) => {
       setQuestion({
@@ -71,33 +105,85 @@ export function useSocket() {
         imageUrl: data.imageUrl,
         tableData: data.tableData,
         timeLimit: data.timeLimit,
-        topic: '',
-        difficulty: 'MEDIUM',
+        topic: data.topic || '',
+        difficulty: data.difficulty || 'MEDIUM',
         createdAt: new Date().toISOString(),
       });
-      setQuestionIndex(data.questionIndex);
-      setTotalQuestions(data.totalQuestions);
+      setQuestionIndex(data.questionIndex ?? 0);
+      setTotalQuestions(data.totalQuestions ?? 0);
       setEndTime(data.endTime);
       setStatus('ACTIVE');
     });
 
     socket.on('question_reveal', (data) => {
-      revealAnswer(data.correctOptionId, data.leaderboard);
+      revealAnswer(data.correctOptionId, data.leaderboard || []);
       setStatus('REVEAL');
     });
+
+    // ---------- Players ----------
 
     socket.on('player_ready_updated', (data) => {
       updatePlayerReady(data.playerId, data.isReady);
     });
 
-    socket.on('game_ended', () => setStatus('ENDED'));
+    socket.on('player_joined', (data) => {
+      // Optional: toast when someone joins
+      if (data?.name) {
+        toast({
+          title: 'Player joined',
+          description: data.name,
+        });
+      }
+    });
+
+    // ---------- Teams ----------
+
+    socket.on('teams_assigned', ({ teams, myTeamId }) => {
+      setTeams(teams || []);
+      if (myTeamId) setMyTeamId(myTeamId);
+
+      const myTeam = (teams || []).find((t) => t.id === myTeamId);
+      if (myTeam) {
+        toast({
+          title: 'Teams assigned!',
+          description: `You're on ${myTeam.name}.`,
+        });
+      }
+    });
+
+    socket.on('team_leaderboard_update', ({ teamLeaderboard }) => {
+      setTeamLeaderboard(teamLeaderboard || []);
+    });
+
+    socket.on('team_score_updated', ({ teamId, score }) => {
+      updateTeamScore(teamId, score);
+    });
+
+    // ---------- Game end ----------
+
+    socket.on('game_ended', (data) => {
+      setStatus('ENDED');
+      if (data?.teamLeaderboard) {
+        setTeamLeaderboard(data.teamLeaderboard);
+      }
+    });
+
+    // ---------- Reconnect token ----------
+
+    socket.on('reconnect_token', ({ roomCode, token }) => {
+      saveReconnectToken(roomCode, token);
+    });
+
+    // ---------- Cleanup ----------
 
     return () => {
       socket.disconnect();
       socketRef.current = null;
+      setIsConnected(false);
     };
   }, [
     accessToken,
+    setRoom,
     setPlayers,
     setStatus,
     setQuestion,
@@ -106,12 +192,22 @@ export function useSocket() {
     setEndTime,
     revealAnswer,
     updatePlayerReady,
+    setTeams,
+    setMyTeamId,
+    setTeamLeaderboard,
+    updateTeamScore,
   ]);
 
-  // ---------- Client → Server ----------
+  // ============================================
+  // Emit helpers
+  // ============================================
 
   const joinRoom = useCallback((code, name) => {
     socketRef.current?.emit('join_room', { code, name });
+  }, []);
+
+  const leaveRoom = useCallback(() => {
+    socketRef.current?.emit('leave_room');
   }, []);
 
   const toggleReady = useCallback(() => {
@@ -134,13 +230,24 @@ export function useSocket() {
     socketRef.current?.emit('sync_state', { token: reconnectToken });
   }, []);
 
+  const assignTeams = useCallback((teams) => {
+    socketRef.current?.emit('assign_teams', { teams });
+  }, []);
+
+  // ============================================
+  // Return
+  // ============================================
+
   return {
     socket: socketRef.current,
     isConnected,
+    // Actions
     joinRoom,
+    leaveRoom,
     toggleReady,
     startGame,
     submitAnswer,
     syncState,
+    assignTeams,
   };
 }
