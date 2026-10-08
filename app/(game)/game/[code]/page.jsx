@@ -219,93 +219,93 @@ export default function GameRoomPage() {
         )}
 
         {/* ---------- LOBBY ---------- */}
-        {status === 'LOBBY' && (
-          <div className="space-y-6">
-            {/* Team assignment panel */}
-            {isTeamMode && (
-              <TeamAssignmentPanel
-                players={players}
-                teams={teams}
-                isHost={isHost}
-                onAssign={({ teams: newTeams }) => assignTeams(newTeams)}
-              />
-            )}
+{status === 'LOBBY' && (
+  <div className="space-y-6">
+    {/* Team assignment panel (host only) */}
+    {isTeamMode && isHost && (
+      <TeamAssignmentPanel
+        players={players}
+        teams={teams}
+        isHost={isHost}
+        onAssign={({ teams: newTeams }) => assignTeams(newTeams)}
+      />
+    )}
 
-            {/* Team cards grid */}
-            {isTeamMode && teams.length > 0 && (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {teams.map((team) => (
-                  <TeamCard
-                    key={team.id}
-                    team={team}
-                    players={players}
-                    isMyTeam={team.id === myTeamId}
-                  />
-                ))}
-              </div>
-            )}
+    {/* Team cards grid */}
+    {isTeamMode && teams.length > 0 && (
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {teams.map((team) => (
+          <TeamCard
+            key={team.id}
+            team={team}
+            players={players}
+            isMyTeam={team.id === myTeamId}
+          />
+        ))}
+      </div>
+    )}
 
-            {/* Players list (solo mode) */}
-            {!isTeamMode && (
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-slate-900">
-                    Waiting for players…
-                  </h2>
-                  <span className="text-sm text-slate-500">
-                    {players.length} joined
-                  </span>
-                </div>
-                <PlayerList players={players} />
-              </div>
-            )}
+    {/* Players list — everyone sees this */}
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-slate-900">
+          {isHost ? 'Waiting for players…' : 'Waiting for your teacher…'}
+        </h2>
+        <span className="text-sm text-slate-500">
+          {players.length} joined
+        </span>
+      </div>
+      <PlayerList players={players} />
+    </div>
 
-            {/* Share panel — host only */}
-            {!isSpectator && isHost && <ShareRoomPanel code={code} />}
+    {/* HOST-ONLY: Share panel + Start Game */}
+    {!isSpectator && isHost && (
+      <>
+        <ShareRoomPanel code={code} />
 
-            {/* Player: Toggle Ready */}
-            {!isSpectator && !isHost && (
-              <div className="flex flex-col items-center gap-2">
-                <Button
-                  variant={myReady ? 'default' : 'outline'}
-                  size="lg"
-                  onClick={toggleReady}
-                >
-                  {myReady ? '✓ Ready' : 'Toggle Ready'}
-                </Button>
-                <p className="text-sm text-slate-500">
-                  Waiting for the host to start the game…
-                </p>
-              </div>
-            )}
+        <div className="flex flex-col items-center gap-2">
+          <Button
+            size="lg"
+            onClick={startGame}
+            disabled={
+              players.length < 1 || (isTeamMode && teams.length === 0)
+            }
+            className="px-12"
+          >
+            Start Quiz
+          </Button>
+          <p className="text-xs text-slate-400">
+            {players.length} player{players.length !== 1 ? 's' : ''} ready
+          </p>
+        </div>
 
-            {/* Host: Start Game only */}
-            {!isSpectator && isHost && (
-              <div className="flex flex-col items-center gap-2">
-                <Button
-                  size="lg"
-                  onClick={startGame}
-                  disabled={
-                    players.length < 1 || (isTeamMode && teams.length === 0)
-                  }
-                  className="px-12"
-                >
-                  Start Game
-                </Button>
-                <p className="text-xs text-slate-400">
-                  {players.length} player{players.length !== 1 ? 's' : ''} in
-                  lobby
-                </p>
-              </div>
-            )}
-
-            {isTeamMode && teams.length === 0 && isHost && (
-              <p className="text-center text-sm text-amber-600">
-                Assign teams before starting.
-              </p>
-            )}
-          </div>
+        {isTeamMode && teams.length === 0 && (
+          <p className="text-center text-sm text-amber-600">
+            Assign teams before starting.
+          </p>
         )}
+      </>
+    )}
+
+    {/* PLAYER-ONLY: Passive waiting */}
+    {!isSpectator && !isHost && (
+      <div className="flex flex-col items-center gap-3 py-4">
+        <div className="flex items-center gap-2 text-slate-500">
+          <span className="relative flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-indigo-500" />
+          </span>
+          <span className="text-sm font-medium">
+            Waiting for the teacher to start…
+          </span>
+        </div>
+        <p className="text-xs text-slate-400">
+          The quiz will begin automatically when the host starts.
+        </p>
+      </div>
+    )}
+  </div>
+)}
 
         {/* ---------- ACTIVE / REVEAL ---------- */}
         {(status === 'ACTIVE' || status === 'REVEAL') && currentQuestion && (

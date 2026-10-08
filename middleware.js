@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 
 const PUBLIC_ROUTES = ['/', '/login', '/register'];
-const PUBLIC_PREFIXES = ['/game/']; // guests can join games
+const PUBLIC_PREFIXES = ['/game/', '/results/'];
 
 export function middleware(request) {
   const { pathname } = request.nextUrl;
 
-  // Allow public routes and Next internals
   if (
     PUBLIC_ROUTES.includes(pathname) ||
     PUBLIC_PREFIXES.some((p) => pathname.startsWith(p)) ||
@@ -17,7 +16,6 @@ export function middleware(request) {
     return NextResponse.next();
   }
 
-  // Check for the refresh cookie (HttpOnly) — set by the backend on login
   const refreshToken = request.cookies.get('refreshToken')?.value;
 
   if (!refreshToken) {
